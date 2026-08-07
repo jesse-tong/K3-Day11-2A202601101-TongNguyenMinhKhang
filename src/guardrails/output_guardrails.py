@@ -47,6 +47,11 @@ def content_filter(response: str) -> dict:
         # - National ID (CMND/CCCD): r"\b\d{9}\b|\b\d{12}\b"
         # - API key pattern: r"sk-[a-zA-Z0-9-]+"
         # - Password pattern: r"password\s*[:=]\s*\S+"
+        "phone": r"0\d{9,10}",
+        "email": r"[\w.-]+@[\w.-]+\.[a-zA-Z]{2,}",
+        "national_id": r"\b\d{9}\b|\b\d{12}\b",
+        "api_key": r"sk-[a-zA-Z0-9-]+",
+        "password": r"password\s*(?:[:=]|is)\s*\S+",
     }
 
     for name, pattern in PII_PATTERNS.items():

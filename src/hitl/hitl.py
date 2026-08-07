@@ -83,14 +83,38 @@ class ConfidenceRouter:
         #    - confidence < 0.7:
         #      action="escalate", priority="high",
         #      requires_human=True, reason="Low confidence — escalating"
-
-        return RoutingDecision(
-            action="auto_send",
-            confidence=confidence,
-            reason="TODO: implement routing logic",
-            priority="low",
-            requires_human=False,
-        )  # TODO: Replace with implementation
+        if action_type in HIGH_RISK_ACTIONS:
+            return RoutingDecision(
+                action="escalate",
+                confidence=confidence,
+                reason=f"High-risk action: {action_type}",
+                priority="high",
+                requires_human=True,
+            )
+        if confidence >= self.HIGH_THRESHOLD:
+            return RoutingDecision(
+                action="auto_send",
+                confidence=confidence,
+                reason="High confidence",
+                priority="low",
+                requires_human=False,
+            )
+        elif confidence >= self.MEDIUM_THRESHOLD:
+            return RoutingDecision(
+                action="queue_review",
+                confidence=confidence,
+                reason="Medium confidence — needs review",
+                priority="normal",
+                requires_human=True,
+            )
+        else:
+            return RoutingDecision(
+                action="escalate",
+                confidence=confidence,
+                reason="Low confidence — escalating",
+                priority="high",
+                requires_human=True,
+            )
 
 
 # ============================================================
@@ -111,33 +135,33 @@ class ConfidenceRouter:
 hitl_decision_points = [
     {
         "id": 1,
-        "name": "TODO: Name this decision point",
-        "trigger": "TODO: When does this trigger?",
-        "hitl_model": "TODO: human-in-the-loop / human-on-the-loop / human-as-tiebreaker",
-        "context_needed": "TODO: What does the reviewer need to see?",
-        "example": "TODO: Give a concrete example scenario",
-        "approval_path": "TODO: Explain approve, reject and timeout behavior",
-        "audit_fields": "TODO: List correlation ID, intent, diff and reviewer decision",
+        "name": "High-Risk Money Transfer & Anti-Fraud Gate",
+        "trigger": "Action is \'transfer_money\' AND (amount > 100,000,000 VND OR beneficiary is new external account)",
+        "hitl_model": "human-in-the-loop",
+        "context_needed": "Account number, beneficiary bank & account name, transfer amount, Anti-Fraud risk score, eKYC status, transaction prompt log",
+        "example": "Customer requests via AI bot to transfer 500,000,000 VND to a newly added beneficiary at another bank.",
+        "approval_path": "Approve -> Trigger core banking API with OTP challenge; Reject -> Freeze transfer & alert Fraud Monitoring team; Timeout (10m) -> Cancel transaction & notify user.",
+        "audit_fields": "correlation_id, customer_cif, intent='transfer_money', payload={'amount': 500000000, 'to_bank': 'NCB', 'to_account': '987654321'}, risk_score=0.88, reviewer_id, reviewer_decision, timestamp",
     },
     {
         "id": 2,
-        "name": "TODO: Name this decision point",
-        "trigger": "TODO: When does this trigger?",
-        "hitl_model": "TODO: human-in-the-loop / human-on-the-loop / human-as-tiebreaker",
-        "context_needed": "TODO: What does the reviewer need to see?",
-        "example": "TODO: Give a concrete example scenario",
-        "approval_path": "TODO: Explain approve, reject and timeout behavior",
-        "audit_fields": "TODO: List correlation ID, intent, diff and reviewer decision",
+        "name": "Unrecognized Transaction Dispute & Emergency Card Lock",
+        "trigger": "Action is 'dispute_transaction' OR (report_fraud AND card_status=='active')",
+        "hitl_model": "human-on-the-loop",
+        "context_needed": "Disputed transaction ID, Merchant Name, Location/Country, Transaction Amount, Customer Card History, Device IP at transaction time",
+        "example": "Customer notifies bot: 'I was charged $800 at a store in London, but I am currently in Hanoi'.",
+        "approval_path": "Approve -> Temporarily block card, issue provisional credit & initiate VISA/Mastercard Chargeback; Reject -> Request additional proof from customer; Edit -> Adjust claim amount.",
+        "audit_fields": "correlation_id, customer_cif, intent='dispute_transaction', transaction_id='TXN-881923', amount_usd=800, merchant='London Retail Store', reviewer_id, reviewer_decision, timestamp",
     },
     {
         "id": 3,
-        "name": "TODO: Name this decision point",
-        "trigger": "TODO: When does this trigger?",
-        "hitl_model": "TODO: human-in-the-loop / human-on-the-loop / human-as-tiebreaker",
-        "context_needed": "TODO: What does the reviewer need to see?",
-        "example": "TODO: Give a concrete example scenario",
-        "approval_path": "TODO: Explain approve, reject and timeout behavior",
-        "audit_fields": "TODO: List correlation ID, intent, diff and reviewer decision",
+        "name": "Credit Limit Increase & Loan Disbursement Review",
+        "trigger": "Action is 'request_loan' or 'increase_credit_limit' OR agent confidence score < 0.70 on credit policy disclosure",
+        "hitl_model": "human-as-tiebreaker",
+        "context_needed": "Customer credit score (CIC), monthly income verification, current debt-to-income ratio (DTI), AI loan assessment score, draft approval offer",
+        "example": "Customer asks AI bot for an instant credit card limit increase from 50M to 200M VND based on salary statement uploaded in chat.",
+        "approval_path": "Approve -> Issue binding loan offer/credit line extension; Edit & Approve -> Offer reduced limit (e.g. 100M VND); Reject -> Decline with regulatory reason code.",
+        "audit_fields": "correlation_id, customer_cif, intent='increase_credit_limit', requested_limit=200000000, approved_limit=100000000, cic_score=720, reviewer_id, reviewer_decision, timestamp",
     },
 ]
 

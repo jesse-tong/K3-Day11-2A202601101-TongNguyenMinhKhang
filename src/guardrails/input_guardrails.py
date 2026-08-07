@@ -41,14 +41,27 @@ def detect_injection(user_input: str) -> bool:
     Returns:
         True if injection detected, False otherwise
     """
+    import unicodedata
+    normalized = unicodedata.normalize("NFKC", user_input or "")
+    normalized = re.sub(r"[\u200B-\u200D\uFEFF\u2060]", "", normalized)
+
     INJECTION_PATTERNS = [
         # TODO: Add at least 5 regex patterns
         # Example:
         # r"ignore (all )?(previous|above) instructions",
+        r"ignore\s+(all\s+)?(previous|above|prior)?\s*instructions",
+        r"you are now",
+        r"system prompt",
+        r"reveal\s+(your|the)?\s*(internal|system)?\s*(instructions|prompt|tools|guardrails|password|secret)",
+        r"pretend you are",
+        r"act as (a|an)?\s*unrestricted",
+        r"bỏ qua (tất cả|các)? hướng dẫn trước do",
+        r"bạn là (một |một )?trợ lý không giới hạn",
+        r"(giả vờ|giờ)? bạn là"
     ]
 
     for pattern in INJECTION_PATTERNS:
-        if re.search(pattern, user_input, re.IGNORECASE):
+        if re.search(pattern, normalized, re.IGNORECASE):
             return True
     return False
 
@@ -78,8 +91,16 @@ def topic_filter(user_input: str) -> bool:
     # 1. If input contains any blocked topic -> return True
     # 2. If input doesn't contain any allowed topic -> return True
     # 3. Otherwise -> return False (allow)
-
-    pass  # Replace with your implementation
+    
+    import unicodedata
+    normalized_input = unicodedata.normalize("NFKC", input_lower)
+    # Remove invisible characters and zero-width characters
+    normalized_input = re.sub(r"[\u200B-\u200D\uFEFF]", "", normalized_input)
+    if any(blocked_topic in normalized_input for blocked_topic in BLOCKED_TOPICS):
+        return True
+    if not any(allowed_topic in normalized_input for allowed_topic in ALLOWED_TOPICS):
+        return True
+    return False
 
 
 # ============================================================
@@ -139,7 +160,15 @@ class InputGuardrailPlugin(base_plugin.BasePlugin):
         #    - If True: increment blocked_count, return self._block_response("...")
         # 3. If both are False: return None (let message through)
 
-        pass  # Replace with your implementation
+        if detect_injection(text):
+            self.blocked_count += 1
+            return self._block_response("Your message contains potentially harmful content.")
+
+        if topic_filter(text):
+            self.blocked_count += 1
+            return self._block_response("Your message is about a restricted topic.")
+
+        return None  # Let the message through
 
 
 # ============================================================
